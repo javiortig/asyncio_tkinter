@@ -1,36 +1,56 @@
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
+import time
+import tkinter as tk
+from tkinter import ttk
+from PIL import ImageTk, Image
+import validators
 
-async def fetch(session, url):
-    async with session.get(url) as response:
-        return await response.read()
 
-async def download_image(url):
-    async with aiohttp.ClientSession() as session:
-        content = await fetch(session, url)
-        return content  # Retorna los datos de la imagen
+class App(tk.Tk):
+## metodos publicos
+    async def exec(self):
+        self.loop = asyncio.get_event_loop()
+        await self._update() 
 
-async def find_and_download_images(page_url):
-    async with aiohttp.ClientSession() as session:
-        page_content = await fetch(session, page_url)
-        soup = BeautifulSoup(page_content, 'html.parser')
-        image_urls = [img['src'] for img in soup.find_all('img') if 'src' in img.attrs]
+## metodos privados
+    def __init__(self):
+        self.loop = None
+        self.images = []
 
-        images = []
-        for image_url in image_urls:
-            print(f"Descargando {image_url}")
-            image_data = await download_image(image_url)
-            images.append(image_data)
-        
-        return images  # Retorna una lista con los datos de todas las imágenes
+        # Crear la ventana principal
+        self.root = tk.Tk()
+        self.root.title("Descargas de imagenes con asyncio")
 
-# URL de la página de donde quieres descargar imágenes
-page_url = 'https://supervivencial.com/curso-de-supervivencia/'
+        # Configurar el layout
+        self.root.grid_columnconfigure(1, weight=1)
+        self.root.grid_rowconfigure(1, weight=1)
 
-# Iniciar el loop de eventos de asyncio
-loop = asyncio.get_event_loop()
-images = loop.run_until_complete(find_and_download_images(page_url))
+        # Crear el Label
+        self.label_url = tk.Label(self.root, text="URL a procesar")
+        self.label_url.grid(row=0, column=0, sticky="e")
 
-# Ahora, `images` contiene los datos binarios de las imágenes descargadas
-print(f"Descargadas {len(images)} imágenes.")
+        # Crear el TextBox
+        self.textbox = tk.Entry(self.root)
+        self.textbox.grid(row=0, column=1, sticky="ew")
+
+        # Crear el ListBox
+        self.listbox = tk.Listbox(self.root)
+        self.listbox.grid(row=2, column=0, sticky="ns")
+
+        # Cargar una iamgen de prueba
+        image = Image.open('asyncio_tkinter/practica 2/dado.png')
+        image = ImageTk.PhotoImage(image)
+        self.label_imagen = tk.Label(self.root, image=image)
+        self.label_imagen.grid(row=3, column=1)
+
+    async def _update(self):
+        while True:
+            self.root.update()
+            await asyncio.sleep(.01)
+
+app = App()
+
+asyncio.run(app.exec())
+

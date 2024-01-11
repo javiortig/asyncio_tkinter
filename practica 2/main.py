@@ -5,17 +5,20 @@ import time
 import tkinter as tk
 from tkinter import ttk
 from PIL import ImageTk, Image
+import validators
 
 
 class App(tk.Tk):
 ## metodos publicos
     async def exec(self):
         self.loop = asyncio.get_event_loop()
-        await self._show() 
+        await self._update() 
 
 ## metodos privados
     def __init__(self):
         self.loop = None
+        self.images = []
+
         # Crear la ventana principal
         self.root = tk.Tk()
         self.root.title("Descargas de imagenes con asyncio")
@@ -62,7 +65,7 @@ class App(tk.Tk):
         async with session.get(url) as response:
             return await response.text()
 
-    async def _download_image(self, session, url, filename):
+    async def __download_image_to_disk(self, session, url, filename):
         async with session.get(url) as response:
             with open(filename, 'wb') as f:
                 while True:
@@ -71,21 +74,38 @@ class App(tk.Tk):
                         break
                     f.write(chunk)
 
+    async def _download_image_to_listbox(self, session, url):
+        """
+        Descarga una imagen y la añade a la Listbox de la interfaz
+        """
+        async with session.get(url) as response:
+            image_data = await response.read()
+            
+            # Guarda el nombre en la listbox
+            self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])
+
+            # Guarda la imagen en memoria
+            self.images.append(Image(ImageTk.PhotoImage(image_data)))
+
     async def _get_images_source_from_url(self, session) -> []:
         """
         Dada una URL en el textbox, devuelve una lista con las urls de las imagenes que contiene la pagina en cuestion.
         """
-        url = self.textbox.get()
+        self.images = [] # Las imagenes raw guardadas en memoria, no en disco
 
+        url = self.textbox.get()
 
         html = await self._fetch_page(session, url)
         soup = BeautifulSoup(html, 'html.parser')
         image_urls = [img['src'] for img in soup.find_all('img') if 'src' in img.attrs]
 
+        # Validar las urls de las imagenes, pues algunas son estaticas
+        image_urls = [img_url for img_url in image_urls if validators.url(img_url)]
+
         return image_urls
 
 
-    async def _update_progress_bar(self):
+    async def __update_progress_bar(self):
         # Oculta el boton mientras se descargan las imagenes
         self._hide_button()
 
@@ -104,15 +124,25 @@ class App(tk.Tk):
             image_urls = await self._get_images_source_from_url(session)
 
             tasks = []
-            for i, img_url in enumerate(image_urls):
-                task = asyncio.create_task(self._download_image(session, img_url, f'asyncio_tkinter/practica 2/img/image_{i}.jpg'))
+            for img_url in image_urls:
+                task = asyncio.create_task(self._download_image_to_listbox(session, img_url))
                 tasks.append(task)
 
             await asyncio.gather(*tasks)
 
-    async def _show(self):
+    def _update_selected_image(self):
+        selected_item = self.listbox.curselection()
+
+        if(selected_item):
+            selected_index = selected_item[0]
+
+            self.label_imagen = tk.Label(self.root, image=self.images[selected_index])
+
+
+    async def _update(self):
         while True:
             self.root.update()
+            self._update_selected_image()
             await asyncio.sleep(.01)
 
 app = App()
