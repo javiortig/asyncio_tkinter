@@ -39,10 +39,10 @@ class Window(tk.Tk):
         self.listbox.grid(row=2, column=0, sticky="ns")
 
         # Cargar una iamgen de prueba
-        image = Image.open('practica 2/apple.jpg')
+        image = Image.open('asyncio_tkinter/practica 2/apple.jpg')
         image = ImageTk.PhotoImage(image)
         self.label_imagen = tk.Label(self.root, image=image)
-        self.label_imagen.grid(row=2, column=1, sticky="nsew")
+        self.label_imagen.grid(row=4, column=1, sticky="nsew")
 
         # Crear y colocar la barra de progreso debajo de la imagen
         self.progressbar = ttk.Progressbar(self.root, orient="horizontal")
@@ -60,11 +60,6 @@ class Window(tk.Tk):
         if not self.button.winfo_viewable():
             self.button.grid(row=1, column=1, sticky="e", padx=30)
 
-    async def show(self):
-        while True:
-            self.root.update()
-            await asyncio.sleep(.001)
-
     async def update_progress_bar(self):
         # Oculta el boton mientras se descargan las imagenes
         self.hide_button()
@@ -74,6 +69,15 @@ class Window(tk.Tk):
             await asyncio.sleep(0.1)
 
         self.show_button()
+
+    async def get_images_source_from_url(self):
+
+
+    async def show(self):
+        while True:
+            self.root.update()
+            await asyncio.sleep(.01)
+
 
 
 asyncio.run(App().exec())
