@@ -6,6 +6,10 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import ImageTk, Image
 import validators
+import io
+
+IMG_W = 300
+IMG_H = 300
 
 
 class App(tk.Tk):
@@ -19,39 +23,54 @@ class App(tk.Tk):
         self.loop = None
         self.images = []
 
-        # Crear la ventana principal
+        # Crea la ventana principal
         self.root = tk.Tk()
         self.root.title("Descargas de imagenes con asyncio")
 
-        # Configurar el layout
-        self.root.grid_columnconfigure(1, weight=1)
-        self.root.grid_rowconfigure(1, weight=1)
+        # Configura los pesos del grid
+        self.root.grid_rowconfigure(2, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=0)
 
-        # Crear el Label
-        self.label_url = tk.Label(self.root, text="URL a procesar")
-        self.label_url.grid(row=0, column=0, sticky="e")
+        # Crea el Label
+        self.label_url = tk.Label(self.root, text="URL a procesar:")
+        self.label_url.grid(row=0, column=0, sticky="e", padx=(0, 5))
 
-        # Crear el TextBox
+        # Crea el TextBox
         self.textbox = tk.Entry(self.root)
-        self.textbox.grid(row=0, column=1, sticky="ew")
+        self.textbox.grid(row=0, column=1, columnspan=2, sticky="ew", padx=(0, 10))
 
-        # Crear el ListBox
-        self.listbox = tk.Listbox(self.root)
-        self.listbox.grid(row=2, column=0, sticky="ns")
+        # Crea el frame donde se encuentran el listbox y el scrollbar
+        self.listbox_frame = tk.Frame(self.root)
+        self.listbox_frame.grid(row=2, column=0, sticky='ew')
 
-        # Cargar una iamgen de prueba
-        image = Image.open('asyncio_tkinter/practica 2/apple.jpg')
-        image = ImageTk.PhotoImage(image)
-        self.label_imagen = tk.Label(self.root, image=image)
-        self.label_imagen.grid(row=4, column=1, sticky="nsew")
+        # Crea el ListBox
+        self.listbox = tk.Listbox(self.listbox_frame)
+        self.listbox.grid(row=0, column=0, sticky="ns")
 
-        # Crear y colocar la barra de progreso debajo de la imagen
+        # Crea el scrollbar y anexarlo a la Listbox
+        self.scrollbar = tk.Scrollbar(self.listbox_frame)
+        self.scrollbar.grid(row=0, column=1, sticky='ns')
+        self.listbox.config(yscrollcommand= self.scrollbar.set)
+        self.scrollbar.config(command=self.listbox.yview)
+
+        # Crea una imagen vacia
+        self._set_empty_image()
+
+        # Crea y colocar la barra de progreso debajo de la imagen
         self.progressbar = ttk.Progressbar(self.root, orient="horizontal")
         self.progressbar.grid(row=3, column=1, padx=10, pady=10)
    
-        # Crear el boton
+        # Crea el boton
         self.button = tk.Button(self.root, text="Buscar", command= lambda: self.loop.create_task(self._get_images()))
-        self.button.grid(row=1, column=1, sticky="e", padx=30)   
+        self.button.grid(row=1, column=1)   
+
+    def _set_empty_image(self):
+        # Cargar una imagen vacia
+        self.image = Image.new('RGB', size=(IMG_W, IMG_H), color=(255, 255, 255))
+        self.image = ImageTk.PhotoImage(self.image)
+        self.label_imagen = tk.Label(self.root, image=self.image)
+        self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
 
     def _hide_button(self):
         if self.button.winfo_viewable():
@@ -78,20 +97,30 @@ class App(tk.Tk):
         """
         Descarga una imagen y la añade a la Listbox de la interfaz
         """
-        async with session.get(url) as response:
-            image_data = await response.read()
-            
-            # Guarda el nombre en la listbox
-            self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])
+        # Guarda el nombre en la listbox
+        self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])        
 
-            # Guarda la imagen en memoria
-            self.images.append(Image(ImageTk.PhotoImage(image_data)))
+        async with session.get(url) as response:
+            image_data = await response.content.read()
+
+            try:
+                # Guarda la imagen en memoria
+                temp_image = Image.open(io.BytesIO(image_data)).resize((IMG_W, IMG_H))
+                temp_image = ImageTk.PhotoImage(temp_image)
+                self.images.append(temp_image)
+            except Exception as e:
+                print(f'>Ha ocurrido una excepción al descargar la imagen de la url={url} con el siguiente resultado: {e}')
+
+
 
     async def _get_images_source_from_url(self, session) -> []:
         """
         Dada una URL en el textbox, devuelve una lista con las urls de las imagenes que contiene la pagina en cuestion.
         """
+        # Reinicia la imagen mostrada, la listbox y la lista de imagenes
         self.images = [] # Las imagenes raw guardadas en memoria, no en disco
+        self.listbox.delete(0, tk.END)
+        self._set_empty_image()
 
         url = self.textbox.get()
 
@@ -133,11 +162,15 @@ class App(tk.Tk):
     def _update_selected_image(self):
         selected_item = self.listbox.curselection()
 
-        if(selected_item):
-            selected_index = selected_item[0]
+        if (not selected_item) or (selected_item[0]<0) or (selected_item[0] >= len(self.images)):
+            return 
+        
+        selected_index = selected_item[0]
 
-            self.label_imagen = tk.Label(self.root, image=self.images[selected_index])
+        self.image = self.images[selected_index]
 
+        self.label_imagen = tk.Label(self.root, image=self.image)
+        self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
 
     async def _update(self):
         while True:
