@@ -1,1 +1,0 @@
-_update_progress_bar

@@ -7,6 +7,10 @@ from tkinter import ttk
 from PIL import ImageTk, Image
 import validators
 import io
+import rx
+from rx import operators as ops
+from rx.scheduler.eventloop import AsyncIOScheduler
+
 
 IMG_W = 300
 IMG_H = 300
@@ -126,6 +130,9 @@ class App(tk.Tk):
                 temp_image = Image.open(io.BytesIO(image_data)).resize((IMG_W, IMG_H))
                 temp_image = ImageTk.PhotoImage(temp_image)
                 self.images.append(temp_image)
+
+                return tk.END, url.split('/')[-1].split('.')[0]
+            
             except Exception as e:
                 print(f'>Ha ocurrido una excepción al descargar la imagen de la url={url} con el siguiente resultado: {e}')
 
@@ -174,6 +181,20 @@ class App(tk.Tk):
                 tasks.append(task)
 
             await asyncio.gather(*tasks)
+
+            # Crea el patron de observable/observer para notificar a la aplicación cada vez que se descarga una imagen
+            scheduler = AsyncIOScheduler(asyncio.get_event_loop())
+            observables = [rx.from_future(asyncio.ensure_future(task)) for task in tasks]
+
+            # Une todo los observables, nos suscribimos a ellos y esperamos hasta que se completen las descargas
+            source = rx.merge(*observables)
+            source.subscribe(
+                on_next=lambda x: print(f'>>>Tarea {x} completada'),
+                on_error=lambda x: print(f'>>>Tarea {x} dio ERROR'),
+                on_completed=lambda: print(f'>>>TAREAS COMPLETADAS'),
+                scheduler=scheduler,
+            )
+            await source
 
     def _update_selected_image(self):
         """
