@@ -13,13 +13,28 @@ IMG_H = 300
 
 
 class App(tk.Tk):
+    """
+    Aplicación que, dada una url, descarga todas las imágenes que contenga la página de forma concurrente y las muestra en la interfaz.
+    Para ello, hace uso principalmente de las siguientes librerías:
+    - Tkinter
+    - Asyncio
+    - BeautifulSoup
+    - Aiohttp
+    - PIL
+    """
 ## metodos publicos
     async def exec(self):
+        """
+        Lanza la aplicación.
+        """
         self.loop = asyncio.get_event_loop()
         await self._update() 
 
 ## metodos privados
     def __init__(self):
+        """
+        Organiza el layout de la interfaz gráfica.
+        """
         self.loop = None
         self.images = []
 
@@ -66,6 +81,9 @@ class App(tk.Tk):
         self.button.grid(row=1, column=1)   
 
     def _set_empty_image(self):
+        """
+        Crea y coloca una imagen en blanco.
+        """
         # Cargar una imagen vacia
         self.image = Image.new('RGB', size=(IMG_W, IMG_H), color=(255, 255, 255))
         self.image = ImageTk.PhotoImage(self.image)
@@ -73,29 +91,29 @@ class App(tk.Tk):
         self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
 
     def _hide_button(self):
+        """
+        Oculta el botón de descarga de la app.
+        """
         if self.button.winfo_viewable():
             self.button.grid_forget()
 
     def _show_button(self):
+        """
+        Muestra el botón de descarga de la app.
+        """
         if not self.button.winfo_viewable():
             self.button.grid(row=1, column=1, sticky="e", padx=30)
 
-    async def _fetch_page(self, session, url):
+    async def _fetch_page(self, session: aiohttp.ClientSession(), url: str):
+        """
+        Dada una sesión y una url, devuelve el contenido(texto) de la página.
+        """
         async with session.get(url) as response:
             return await response.text()
 
-    async def __download_image_to_disk(self, session, url, filename):
-        async with session.get(url) as response:
-            with open(filename, 'wb') as f:
-                while True:
-                    chunk = await response.content.read(1024)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-
-    async def _download_image_to_listbox(self, session, url):
+    async def _download_image_to_listbox(self, session: aiohttp.ClientSession(), url: str):
         """
-        Descarga una imagen y la añade a la Listbox de la interfaz
+        Descarga una imagen y la añade a la Listbox de la interfaz.
         """
         # Guarda el nombre en la listbox
         self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])        
@@ -111,11 +129,9 @@ class App(tk.Tk):
             except Exception as e:
                 print(f'>Ha ocurrido una excepción al descargar la imagen de la url={url} con el siguiente resultado: {e}')
 
-
-
-    async def _get_images_source_from_url(self, session) -> []:
+    async def _get_images_source_from_url(self, session: aiohttp.ClientSession()) -> []:
         """
-        Dada una URL en el textbox, devuelve una lista con las urls de las imagenes que contiene la pagina en cuestion.
+        Dada una URL en el textbox, devuelve una lista con las urls de las imagenes que contiene la página en cuestion.
         """
         # Reinicia la imagen mostrada, la listbox y la lista de imagenes
         self.images = [] # Las imagenes raw guardadas en memoria, no en disco
@@ -146,8 +162,8 @@ class App(tk.Tk):
 
     async def _get_images(self):
         """
-        Llamada desde el boton de la interfaz, obtiene las imagenes de forma concurrente y las coloca
-        en la lista conforme se descargan. Ademas, actualiza la barra de progreso conforme una imagen termina de descargarse.
+        Llamada desde el boton de la interfaz, obtiene las imágenes de forma concurrente y las coloca
+        en la lista conforme se descargan. Además, actualiza la barra de progreso conforme una imagen termina de descargarse.
         """
         async with aiohttp.ClientSession() as session:
             image_urls = await self._get_images_source_from_url(session)
@@ -160,6 +176,9 @@ class App(tk.Tk):
             await asyncio.gather(*tasks)
 
     def _update_selected_image(self):
+        """
+        Cambia la imágen mostrada al usuario a la nueva selección de la Listbox.
+        """
         selected_item = self.listbox.curselection()
 
         if (not selected_item) or (selected_item[0]<0) or (selected_item[0] >= len(self.images)):
@@ -173,6 +192,12 @@ class App(tk.Tk):
         self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
 
     async def _update(self):
+        """
+        Loop de ejecucción de la app. Se compone de tres partes que se actualizan en cada iteración:
+        - La intefaz gráfica.
+        - La imagen seleccionada de la listbox, si existe.
+        - Las tareas y el resto de funcionalidades de asyncio.
+        """
         while True:
             self.root.update()
             self._update_selected_image()
