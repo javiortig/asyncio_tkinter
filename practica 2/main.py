@@ -25,6 +25,7 @@ class App(tk.Tk):
     - BeautifulSoup
     - Aiohttp
     - PIL
+    - RX
     """
 ## metodos publicos
     async def exec(self):
@@ -126,19 +127,16 @@ class App(tk.Tk):
         """
         async with session.get(url) as response:
             response_text = await response.text()
-            
-        session.close()
+
         return response_text
 
     async def _download_image(self, session: aiohttp.ClientSession, url: str):
         """
         Descarga una imagen de forma asíncrona.
         """      
-
         async with session.get(url) as response:
             image = await response.content.read()
         
-        session.close()
         return (url, image)
                 
 
@@ -166,8 +164,6 @@ class App(tk.Tk):
         # Muestra el número de imágenes encontradas
         self.label_count = tk.Label(self.root, text="Se han encontrado " + str(self.image_count) + " imágenes.")
         self.label_count.grid(row=4, column=1, padx=10, pady=10)
-
-        session.close()
 
         return image_urls
 
@@ -207,6 +203,8 @@ class App(tk.Tk):
         Llamada desde el boton de la interfaz, obtiene las imágenes de forma concurrente y las coloca
         en la lista conforme se descargan. Además, actualiza la barra de progreso conforme una imagen termina de descargarse.
         """
+        self._empty_progress_bar()
+
         async with aiohttp.ClientSession() as session:
             image_urls = await self._get_images_source_from_url(session)
 
@@ -231,11 +229,17 @@ class App(tk.Tk):
             )
             await source
 
+    def _empty_progress_bar(self):
+        """
+        Vacía la barra de progreso
+        """
+        self.progressbar["value"] = 0
+
     def _update_progress_bar(self):
         """
         Actualiza la barra de progreso según el número de imágenes que se han descargado respecto al total.
         """
-        #print(((self.listbox.size()) / self.image_count) * 100) Como se descargan de forma casi instantánea tuve que debuguear que realmente estuviese aumentando
+        #print(((self.listbox.size()) / self.image_count) * 100) #Como se descargan de forma casi instantánea tuve que debuguear que realmente estuviese aumentando
         self.progressbar["value"] = ((self.listbox.size()) / self.image_count) * 100
 
     def _update_selected_image(self):
