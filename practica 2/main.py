@@ -41,6 +41,7 @@ class App(tk.Tk):
         """
         self.loop = None
         self.images = []
+        self.closing = False
 
         # Crea la ventana principal
         self.root = tk.Tk()
@@ -88,6 +89,13 @@ class App(tk.Tk):
         self.button = tk.Button(self.root, text="Buscar", command= lambda: self.loop.create_task(self._get_images()))
         self.button.grid(row=1, column=1)   
 
+        self.root.protocol("WM_DELETE_WINDOW", self._close_app)
+
+    def _close_app(self):
+        self.closing = True
+        self.listbox.destroy()
+        self.root.destroy()
+
     def _set_empty_image(self):
         """
         Crea y coloca una imagen en blanco.
@@ -112,24 +120,29 @@ class App(tk.Tk):
         if not self.button.winfo_viewable():
             self.button.grid(row=1, column=1, sticky="e", padx=30)
 
-    async def _fetch_page(self, session: aiohttp.ClientSession(), url: str):
+    async def _fetch_page(self, session: aiohttp.ClientSession, url: str):
         """
         Dada una sesión y una url, devuelve el contenido(texto) de la página.
         """
         async with session.get(url) as response:
-            return await response.text()
+            response_text = await response.text()
+            
+        session.close()
+        return response_text
 
-    async def _download_image(self, session: aiohttp.ClientSession(), url: str):
+    async def _download_image(self, session: aiohttp.ClientSession, url: str):
         """
         Descarga una imagen de forma asíncrona.
         """      
 
         async with session.get(url) as response:
             image = await response.content.read()
-            return (url, image)
+        
+        session.close()
+        return (url, image)
                 
 
-    async def _get_images_source_from_url(self, session: aiohttp.ClientSession()) -> []:
+    async def _get_images_source_from_url(self, session: aiohttp.ClientSession) -> []:
         """
         Dada una URL en el textbox, devuelve una lista con las urls de las imagenes que contiene la página en cuestion.
         """
@@ -153,6 +166,8 @@ class App(tk.Tk):
         # Muestra el número de imágenes encontradas
         self.label_count = tk.Label(self.root, text="Se han encontrado " + str(self.image_count) + " imágenes.")
         self.label_count.grid(row=4, column=1, padx=10, pady=10)
+
+        session.close()
 
         return image_urls
 
@@ -227,17 +242,18 @@ class App(tk.Tk):
         """
         Cambia la imágen mostrada al usuario a la nueva selección de la Listbox.
         """
-        selected_item = self.listbox.curselection()
+        if not self.closing:
+            selected_item = self.listbox.curselection()
 
-        if (not selected_item) or (selected_item[0]<0) or (selected_item[0] >= len(self.images)):
-            return 
-        
-        selected_index = selected_item[0]
+            if (not selected_item) or (selected_item[0]<0) or (selected_item[0] >= len(self.images)):
+                return 
+            
+            selected_index = selected_item[0]
 
-        self.image = self.images[selected_index]
+            self.image = self.images[selected_index]
 
-        self.label_imagen = tk.Label(self.root, image=self.image)
-        self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
+            self.label_imagen = tk.Label(self.root, image=self.image)
+            self.label_imagen.grid(row=2, column=1, sticky="nsew", padx=(0, 10))
 
     async def _update(self):
         """
@@ -246,7 +262,7 @@ class App(tk.Tk):
         - La imagen seleccionada de la listbox, si existe.
         - Las tareas y el resto de funcionalidades de asyncio.
         """
-        while True:
+        while not self.closing:
             self.root.update()
             self._update_selected_image()
             await asyncio.sleep(.01)
