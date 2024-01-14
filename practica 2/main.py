@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import time
 import tkinter as tk
 from tkinter import ttk
-from PIL import ImageTk, Image
+from PIL import ImageTk, Image, UnidentifiedImageError
 import validators
 import io
 import rx
@@ -79,6 +79,10 @@ class App(tk.Tk):
         # Crea y colocar la barra de progreso debajo de la imagen
         self.progressbar = ttk.Progressbar(self.root, orient="horizontal")
         self.progressbar.grid(row=3, column=1, padx=10, pady=10)
+
+        # Crea el Label donde se cuentan el numero de imagenes encontradas
+        self.label_count = tk.Label(self.root, text="")
+        self.label_count.grid(row=4, column=1, padx=10, pady=10)
    
         # Crea el boton
         self.button = tk.Button(self.root, text="Buscar", command= lambda: self.loop.create_task(self._get_images()))
@@ -115,26 +119,15 @@ class App(tk.Tk):
         async with session.get(url) as response:
             return await response.text()
 
-    async def _download_image_to_listbox(self, session: aiohttp.ClientSession(), url: str):
+    async def _download_image(self, session: aiohttp.ClientSession(), url: str):
         """
-        Descarga una imagen y la añade a la Listbox de la interfaz.
-        """
-        # Guarda el nombre en la listbox
-        self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])        
+        Descarga una imagen de forma asíncrona.
+        """      
 
         async with session.get(url) as response:
-            image_data = await response.content.read()
-
-            try:
-                # Guarda la imagen en memoria
-                temp_image = Image.open(io.BytesIO(image_data)).resize((IMG_W, IMG_H))
-                temp_image = ImageTk.PhotoImage(temp_image)
-                self.images.append(temp_image)
-
-                return tk.END, url.split('/')[-1].split('.')[0]
-            
-            except Exception as e:
-                print(f'>Ha ocurrido una excepción al descargar la imagen de la url={url} con el siguiente resultado: {e}')
+            image = await response.content.read()
+            return (url, image)
+                
 
     async def _get_images_source_from_url(self, session: aiohttp.ClientSession()) -> []:
         """
@@ -154,18 +147,45 @@ class App(tk.Tk):
         # Validar las urls de las imagenes, pues algunas son estaticas
         image_urls = [img_url for img_url in image_urls if validators.url(img_url)]
 
+        # Guarda el número de imagenes encontradas en la clase
+        self.image_count = len(image_urls)
+
+        # Muestra el número de imágenes encontradas
+        self.label_count = tk.Label(self.root, text="Se han encontrado " + str(self.image_count) + " imágenes.")
+        self.label_count.grid(row=4, column=1, padx=10, pady=10)
+
         return image_urls
 
+    def _task_finished(self, image_data):
+        url, image = image_data
 
-    async def __update_progress_bar(self):
-        # Oculta el boton mientras se descargan las imagenes
-        self._hide_button()
+        print(f'>>Tarea completada para la imagen {url}')
 
-        for i in range(0, 100, 1):
-            self.progressbar["value"] = i
-            await asyncio.sleep(0.1)
+        # Guarda la imagen en memoria
+        try:
+            temp_image = Image.open(io.BytesIO(image)).resize((IMG_W, IMG_H))
+            temp_image = ImageTk.PhotoImage(temp_image)
+            self.images.append(temp_image)
 
-        self._show_button()
+            # Guarda el nombre de la imagen en la listbox
+            self.listbox.insert(tk.END, url.split('/')[-1].split('.')[0])
+
+        except Exception as e:
+            # Hay imágenes que PIL no procesa, por lo que las quitaremos del recuento
+            print(f'>La imagen descargada no pudo ser procesada y lanzó la siguiente excepción:  {e}')
+            self.image_count -= 1
+
+            # Muestra el número de imágenes actualizado
+            self.label_count = tk.Label(self.root, text="Se han encontrado " + str(self.image_count) + " imágenes.")
+            self.label_count.grid(row=4, column=1, padx=10, pady=10)
+
+        self._update_progress_bar()
+        
+    def _task_error(self, e):
+        print(f'>>Ha ocurrido un error al ejecutar la tarea: {e}')
+
+    def _all_task_finished(self):
+        print(f'>>>Todas las tareas finalizadas')
 
     async def _get_images(self):
         """
@@ -177,7 +197,7 @@ class App(tk.Tk):
 
             tasks = []
             for img_url in image_urls:
-                task = asyncio.create_task(self._download_image_to_listbox(session, img_url))
+                task = asyncio.create_task(self._download_image(session, img_url))
                 tasks.append(task)
 
             await asyncio.gather(*tasks)
@@ -189,12 +209,19 @@ class App(tk.Tk):
             # Une todo los observables, nos suscribimos a ellos y esperamos hasta que se completen las descargas
             source = rx.merge(*observables)
             source.subscribe(
-                on_next=lambda x: print(f'>>>Tarea {x} completada'),
-                on_error=lambda x: print(f'>>>Tarea {x} dio ERROR'),
-                on_completed=lambda: print(f'>>>TAREAS COMPLETADAS'),
+                on_next=self._task_finished,
+                on_error=self._task_error,
+                on_completed=self._all_task_finished,
                 scheduler=scheduler,
             )
             await source
+
+    def _update_progress_bar(self):
+        """
+        Actualiza la barra de progreso según el número de imágenes que se han descargado respecto al total.
+        """
+        #print(((self.listbox.size()) / self.image_count) * 100) Como se descargan de forma casi instantánea tuve que debuguear que realmente estuviese aumentando
+        self.progressbar["value"] = ((self.listbox.size()) / self.image_count) * 100
 
     def _update_selected_image(self):
         """
@@ -223,6 +250,7 @@ class App(tk.Tk):
             self.root.update()
             self._update_selected_image()
             await asyncio.sleep(.01)
+
 
 app = App()
 
